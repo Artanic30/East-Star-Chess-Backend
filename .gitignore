@@ -1,0 +1,10 @@
+
+backend/\.idea/
+
+backend/backend/__pycache__/
+
+backend/lin/__pycache__/
+
+backend/venv/
+
+*.sqlite3
