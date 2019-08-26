@@ -1,13 +1,13 @@
 from django.http import JsonResponse
 from django.contrib.auth import authenticate, login, logout
-from .models import User, Board
+from .models import User, Board, BoardInfo
 from django.core import serializers
 import django.utils.timezone as timezone
 import re
 
 
 # Create your views here.
-class Board:
+class ChessBoard:
     def __init__(self, m, n):
         self.size = (m, n)
         self.matrix = [[0 for j in range(n)] for i in range(m)]
@@ -138,6 +138,39 @@ class Board:
         return decision, sign
 
 
+"""
+"""
+
+
+def init_match(request):
+    if request.user.is_authenticated:
+        boards = Board.objects.all()
+        for board in boards:
+            if len(board.players.all()) == 1:
+                BoardInfo(board=board, players=request.user).save()
+                return JsonResponse({'msg': 'success'})
+        if len(Board.objects.filter(board=request.user.username + str(request.user.games))) == 0:
+            new_board = Board.objects.create(board=request.user.username + str(request.user.games))
+            new_board.save()
+            BoardInfo(board=new_board, players=request.user)
+        return JsonResponse({'msg': 'pending'})
+    else:
+        return JsonResponse({'msg': 'User unauthorized!'})
+
+
+def init_state(request):
+    if request.user.is_authenticated:
+        result = {
+            'state': True
+        }
+        return JsonResponse(result)
+    else:
+        result = {
+            'state': False
+        }
+        return JsonResponse(result)
+
+
 def register(request):
     print(request.POST)
     name = request.POST.get('username')
@@ -147,7 +180,7 @@ def register(request):
         data = {
             'msg': 'The name has already been used!'
         }
-        return JsonResponse
+        return JsonResponse(data)
     else:
         User.objects.create(nickname=name, password=password, email=email)
     data = {
@@ -192,7 +225,7 @@ def profile(request, name):
             'nickname': Profile.nickname,
             'games': Profile.games,
             # todo: serializer
-            'email': 'email@email.com',
+            'email': Profile.email,
             'wins': Profile.wins,
             'remark': Profile.remark,
         }
@@ -209,7 +242,7 @@ def init_game(request):
     global b
     global sign
     sign = 1
-    b = Board(5, 5)
+    b = ChessBoard(5, 5)
     data = {'board': b.matrix}
     return JsonResponse(data)
 

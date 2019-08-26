@@ -8,3 +8,11 @@ backend/lin/__pycache__/
 backend/venv/
 
 *.sqlite3
+
+.idea/
+
+backend/__pycache__/
+
+backend/build/
+
+backend/lin/migrations/
