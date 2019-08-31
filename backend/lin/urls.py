@@ -13,4 +13,5 @@ urlpatterns = [
     path('register', views.register, name='register'),
     path('profile/<str:name>', views.profile, name='profile'),
     path('match/init', views.init_match, name='init_match'),
+    path('players', views.players, name='players'),
 ]

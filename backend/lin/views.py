@@ -142,17 +142,42 @@ class ChessBoard:
 """
 
 
+def players(request):
+    if request.user.is_authenticated:
+        boarding = BoardInfo.objects.filter(players=request.user)[0].board
+        result = {
+             'msg': 'success',
+             'players': [
+                 {
+                     'name': boarding.players.all()[0].nickname
+                 },
+                 {
+                     'name': boarding.players.all()[1].nickname
+                 }
+             ]
+         }
+        return JsonResponse(result)
+    else:
+        return JsonResponse({'msg': 'User unauthorized!'})
+
+
 def init_match(request):
+    print(request.user)
     if request.user.is_authenticated:
         boards = Board.objects.all()
         for board in boards:
-            if len(board.players.all()) == 1:
+            print(board.players.all())
+            if len(board.players.all()) == 1 and request.user not in board.players.all():
                 BoardInfo(board=board, players=request.user).save()
+                return JsonResponse({'msg': 'success'})
+            if len(board.players.all()) == 2 and request.user in board.players.all() and \
+                    BoardInfo(board=board, players=request.user).endTime == None:
+                print('reconnect!')
                 return JsonResponse({'msg': 'success'})
         if len(Board.objects.filter(board=request.user.username + str(request.user.games))) == 0:
             new_board = Board.objects.create(board=request.user.username + str(request.user.games))
             new_board.save()
-            BoardInfo(board=new_board, players=request.user)
+            BoardInfo(board=new_board, players=request.user).save()
         return JsonResponse({'msg': 'pending'})
     else:
         return JsonResponse({'msg': 'User unauthorized!'})
@@ -172,7 +197,6 @@ def init_state(request):
 
 
 def register(request):
-    print(request.POST)
     name = request.POST.get('username')
     password = request.POST.get('password')
     email = request.POST.get('email')
