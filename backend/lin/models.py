@@ -16,12 +16,15 @@ class User(AbstractUser):
 class Board(models.Model):
     board = models.CharField(max_length=300)
     sign = models.IntegerField(default=1)
+    content = models.CharField(max_length=300, default='')
     players = models.ManyToManyField(User, through='BoardInfo')
+    end_msg = models.CharField(max_length=300, default='')
 
 
 class BoardInfo(models.Model):
     players = models.ForeignKey(User, on_delete=models.CASCADE)
     board = models.ForeignKey(Board, on_delete=models.CASCADE)
+    sign = models.IntegerField(default=1)
     createTime = models.DateField(auto_now_add=True)
     endTime = models.DateField(blank=True, null=True)
 

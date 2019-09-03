@@ -3,14 +3,17 @@ from django.contrib.auth import authenticate, login, logout
 from .models import User, Board, BoardInfo
 from django.core import serializers
 import django.utils.timezone as timezone
-import re
+import re, json
 
 
 # Create your views here.
 class ChessBoard:
-    def __init__(self, m, n):
+    def __init__(self, m=5, n=5, exist_board=None):
         self.size = (m, n)
-        self.matrix = [[0 for j in range(n)] for i in range(m)]
+        if not exist_board:
+            self.matrix = [[0 for j in range(n)] for i in range(m)]
+        else:
+            self.matrix = exist_board
 
     def __str__(self):
         mark = {0: "", 1: "×", -1: "⚪"}
@@ -27,7 +30,6 @@ class ChessBoard:
         return board
 
     def update(self, pos, sign):
-        print(pos, sign)
         i = pos[0]
         j = pos[1]
         if (
@@ -40,6 +42,7 @@ class ChessBoard:
             return False
         else:
             self.matrix[i][j] = sign
+            return True
 
     def check(self, target, directions, sign):
         t = self.matrix[target[0]][target[1]]
@@ -142,40 +145,47 @@ class ChessBoard:
 """
 
 
-def players(request):
+def players(request, board_id):
     if request.user.is_authenticated:
-        boarding = BoardInfo.objects.filter(players=request.user)[0].board
-        result = {
-             'msg': 'success',
-             'players': [
-                 {
-                     'name': boarding.players.all()[0].nickname
-                 },
-                 {
-                     'name': boarding.players.all()[1].nickname
-                 }
-             ]
-         }
+        boarding = checking_board(request.user, board_id)
+        if boarding:
+            sign = 1
+            for player in boarding.players.all():
+                tem = BoardInfo.objects.get(players=player, board=boarding)
+                tem.sign = sign
+                tem.save()
+                sign = - sign
+            result = {
+                'msg': 'success',
+                'players': [
+                    {
+                        'name': boarding.players.all()[0].nickname
+                    },
+                    {
+                        'name': boarding.players.all()[1].nickname
+                    }
+                ]
+            }
+        else:
+            return JsonResponse({'msg': "Due to error, we can't find your game, please match again!"})
         return JsonResponse(result)
+
     else:
         return JsonResponse({'msg': 'User unauthorized!'})
 
 
 def init_match(request):
-    print(request.user)
     if request.user.is_authenticated:
         boards = Board.objects.all()
         for board in boards:
-            print(board.players.all())
             if len(board.players.all()) == 1 and request.user not in board.players.all():
                 BoardInfo(board=board, players=request.user).save()
-                return JsonResponse({'msg': 'success'})
+                return JsonResponse({'msg': 'success', 'board_id': board.pk})
             if len(board.players.all()) == 2 and request.user in board.players.all() and \
-                    BoardInfo(board=board, players=request.user).endTime == None:
-                print('reconnect!')
-                return JsonResponse({'msg': 'success'})
-        if len(Board.objects.filter(board=request.user.username + str(request.user.games))) == 0:
-            new_board = Board.objects.create(board=request.user.username + str(request.user.games))
+                    not BoardInfo.objects.get(board=board, players=request.user).endTime:
+                return JsonResponse({'msg': 'success', 'board_id': board.pk})
+        if len(Board.objects.filter(board=request.user.username + ' ' + str(request.user.games))) == 0:
+            new_board = Board.objects.create(board=request.user.username + ' ' + str(request.user.games))
             new_board.save()
             BoardInfo(board=new_board, players=request.user).save()
         return JsonResponse({'msg': 'pending'})
@@ -200,13 +210,13 @@ def register(request):
     name = request.POST.get('username')
     password = request.POST.get('password')
     email = request.POST.get('email')
-    if User.objects.filter(nickname=name).length() != 0:
+    if len(User.objects.filter(username=name)) != 0:
         data = {
             'msg': 'The name has already been used!'
         }
         return JsonResponse(data)
     else:
-        User.objects.create(nickname=name, password=password, email=email)
+        User.objects.create(username=name, password=password, email=email).save()
     data = {
         'msg': 'success!'
     }
@@ -262,37 +272,102 @@ def profile(request, name):
         return JsonResponse({'msg': "You didn't login"})
 
 
-def init_game(request):
-    global b
-    global sign
-    sign = 1
-    b = ChessBoard(5, 5)
-    data = {'board': b.matrix}
-    return JsonResponse(data)
-
-
-def update(request):
-    global b
-    global sign
-    post = request.body.decode()
-    row = int(re.search(':[0-9]+,', post).group()[1:-1])
-    column = int(re.search(':[0-9]+}', post).group()[1:-1])
-    data = {}
-    if row == -1:
-        data["matrix"] = b.matrix
-        data["msg"] = "NA"
-        return JsonResponse(data)
-    mark = {0: "", 1: "×", -1: "⚪"}
-    if b.update((row, column), sign) == False:
-        data["msg"] = "no"
+def init_game(request, board_id):
+    boarding = checking_board(request.user, board_id)
+    if not boarding:
+        data = {
+            'msg': "Due to error, we can't find your game, please match again!"
+        }
     else:
-        if b.ifwin(sign):
-            data["msg"] = mark[sign] + " win!!"
-        elif b.iflose(sign):
-            data["msg"] = mark[sign] + " lose!!"
+        if boarding.content == '':
+            empty = [[0 for j in range(5)] for i in range(5)]
+            boarding.content = json.dumps(empty)
+            boarding.save()
+            data = {
+                'board': empty,
+                'msg': 'success'
+            }
         else:
-            data["msg"] = "NA"
-            sign = -sign
-    data["matrix"] = b.matrix
-    print(data)
+            data = {
+                'board': json.loads(boarding.content),
+                'msg': 'success'
+            }
+        if boarding.end_msg != '':
+            data = {
+                'board': boarding.end_msg,
+                'msg': 'end'
+            }
     return JsonResponse(data)
+
+
+def update(request, board_id):
+    board = checking_board(request.user, board_id)
+    data = {}
+    if board:
+        sign = board.sign
+        if sign == BoardInfo.objects.get(board=board, players=request.user).sign:
+            b = ChessBoard(exist_board=json.loads(board.content))
+            row = int(request.POST.get('row'))
+            column = int(request.POST.get('col'))
+            if row == -1:
+                data["matrix"] = b.matrix
+                data["msg"] = "NA"
+                return JsonResponse(data)
+            mark = {0: "", 1: "×", -1: "⚪"}
+            if not b.update((row, column), sign):
+                data["msg"] = "no"
+            else:
+                if b.ifwin(sign):
+                    data["msg"] = mark[sign] + " win!!"
+                    board.end_msg = mark[sign] + " win!!"
+                    board.board += 'ended'
+                    end_info(board, sign, True)
+                elif b.iflose(sign):
+                    end_info(board, sign, False)
+                    board.board += 'ended'
+                    data["msg"] = mark[sign] + " lose!!"
+                    board.end_msg = mark[sign] + " lose!!"
+                else:
+                    data["msg"] = "NA"
+                    sign = -sign
+            data["matrix"] = b.matrix
+            board.content = json.dumps(b.matrix)
+            board.sign = sign
+            board.save()
+            return JsonResponse(data)
+        else:
+            data["msg"] = "no"
+            return JsonResponse(data)
+    else:
+        data['msg'] = "Due to error, we can't find your game, please match again!"
+        return JsonResponse(data)
+
+
+def checking_board(user, board_id):
+    # check if board related to board_id exist and return a Board
+    b = 0
+    if len(Board.objects.filter(pk=board_id)) == 0:
+        boards = Board.objects.all()
+        for board in boards:
+            if user in board.players.all() and len(board.players.all()) == 2 and not BoardInfo(board=board, players=user).endTime:
+                b = board
+    else:
+        b = Board.objects.get(pk=board_id)
+    if b == 0:
+        return False
+    else:
+        return b
+
+
+def end_info(board, sign, win):
+    for info in BoardInfo.objects.filter(board=board):
+        if not info.endTime:
+            info.endTime = timezone.now()
+            info.save()
+        for player in board.players.all():
+            if (BoardInfo.objects.get(board=board, players=player).sign == sign and win) or \
+             (BoardInfo.objects.get(board=board, players=player).sign != sign and not win):
+                player.wins += 1
+                player.save()
+
+
