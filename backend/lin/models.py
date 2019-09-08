@@ -9,8 +9,8 @@ class User(AbstractUser):
     wins = models.IntegerField(default=0)
     remark = models.CharField(max_length=50, default='你还没有设置哦')
     email = models.EmailField(default='', max_length=50)
-    ups = models.ForeignKey('User', on_delete=models.CASCADE, related_name='ups_user', verbose_name='profile_ups', null=True)
-    downs = models.ForeignKey('User', on_delete=models.CASCADE, related_name='downs_user', verbose_name='profile_downs', null=True)
+    # ups = models.ForeignKey('User', on_delete=models.CASCADE, related_name='ups_user', verbose_name='profile_ups', null=True)
+    # downs = models.ForeignKey('User', on_delete=models.CASCADE, related_name='downs_user', verbose_name='profile_downs', null=True)
 
 
 class Board(models.Model):
