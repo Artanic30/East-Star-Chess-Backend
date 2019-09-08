@@ -3,6 +3,9 @@ from .models import Board, BoardInfo, User
 
 
 class BoardSerializers(serializers.ModelSerializer):
+    board = serializers.CharField(max_length=300, required=False)
+    players = serializers.PrimaryKeyRelatedField(many=True, read_only=True, required=False)
+
     class Meta:
         model = Board
         fields = '__all__'
@@ -15,7 +18,9 @@ class BoardSerializers(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         print('Board updated!!')
-        instance.endTime = validated_data.get('endTime', instance.endTime)
+        instance.end_msg = validated_data.get('end_msg', instance.end_msg)
+        instance.content = validated_data.get('content', instance.content)
+        instance.board = validated_data.get(instance.board + 'board', instance.board)
         instance.save()
         return instance
 
@@ -33,8 +38,9 @@ class BoardInfoSerializers(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         print('BoardInfo updated!!')
-        # only update endTime info
+        # only update endTime info and sign
         instance.endTime = validated_data.get('endTime', instance.endTime)
+        instance.sign = validated_data.get('sign', instance.sign)
         instance.save()
         return instance
 
