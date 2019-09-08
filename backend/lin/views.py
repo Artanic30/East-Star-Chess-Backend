@@ -4,20 +4,19 @@ from .models import User, Board, BoardInfo
 import django.utils.timezone as timezone
 from .chess import ChessBoard
 import json
-from .serializers import UserSerializers, BoardInfoSerializers, BoardSerializers
+from django.views.generic import View
 
 
 # Create your views here.
 def players(request, board_id):
     if request.user.is_authenticated:
         boarding = checking_board(request.user, board_id)
-        se_board = BoardSerializers(boarding)
         if boarding:
             sign = 1
             for player in boarding.players.all():
                 tem = BoardInfo.objects.get(players=player, board=boarding)
-                boinfo_s = BoardInfoSerializers(tem, data={'sign': sign}, partial=True)
-                test_valid(boinfo_s)
+                tem.sign = sign
+                tem.save()
                 sign = - sign
             result = {
                 'msg': 'success',
@@ -138,28 +137,27 @@ def profile(request, name):
 
 def init_game(request, board_id):
     boarding = checking_board(request.user, board_id)
-    se_board = BoardSerializers(boarding)
     if not boarding:
         data = {
             'msg': "Due to error, we can't find your game, please match again!"
         }
     else:
-        if se_board.data.get('content') == '':
+        if boarding.content == '':
             empty = [[0 for j in range(5)] for i in range(5)]
-            boarding = BoardSerializers(boarding,  data={'content': empty}, partial=True)
-            test_valid(boarding)
+            boarding.content = json.dumps(empty)
+            boarding.save()
             data = {
                 'board': empty,
                 'msg': 'success'
             }
         else:
             data = {
-                'board': json.loads(se_board.data.get('content')),
+                'board': json.loads(boarding.content),
                 'msg': 'success'
             }
-        if se_board.data.get('end_msg') != '':
+        if boarding.end_msg != '':
             data = {
-                'board': se_board.data.get('end_msg'),
+                'board': boarding.end_msg,
                 'msg': 'end'
             }
     return JsonResponse(data)
@@ -167,15 +165,11 @@ def init_game(request, board_id):
 
 def update(request, board_id):
     board = checking_board(request.user, board_id)
-    se_board = BoardSerializers(board)
     data = {}
     if board:
-        sign = se_board.data.get('sign')
-        tem_boinfo = BoardInfo.objects.get(board=board, players=request.user)
-        # todo: is serializer necessary if we could get the data through models directly?
-        # BoardInfoSerializers(tem_boinfo).data.get('sign')
-        if sign == BoardInfoSerializers(tem_boinfo).data.get('sign'):
-            b = ChessBoard(exist_board=json.loads(se_board.data.get('content')))
+        sign = board.sign
+        if sign == BoardInfo.objects.get(board=board, players=request.user).sign:
+            b = ChessBoard(exist_board=json.loads(board.content))
             row = int(request.POST.get('row'))
             column = int(request.POST.get('col'))
             if row == -1:
@@ -188,27 +182,21 @@ def update(request, board_id):
             else:
                 if b.ifwin(sign):
                     data["msg"] = mark[sign] + " win!!"
-                    # board.end_msg = mark[sign] + " win!!"
-                    # board.board += 'ended'
-                    se_board = BoardSerializers(board, data={'end_msg': mark[sign] + " win!!", 'board': 'ended'}, partial=True)
-                    test_valid(se_board)
+                    board.end_msg = mark[sign] + " win!!"
+                    board.board += 'ended'
                     end_info(board, sign, True)
                 elif b.iflose(sign):
                     end_info(board, sign, False)
-                    se_board = BoardSerializers(board, data={'end_msg': mark[sign] + " lose!!", 'board': 'ended'}, partial=True)
-                    test_valid(se_board)
-                    # board.board += 'ended'
-                    # board.end_msg = mark[sign] + " lose!!"
+                    board.board += 'ended'
                     data["msg"] = mark[sign] + " lose!!"
+                    board.end_msg = mark[sign] + " lose!!"
                 else:
                     data["msg"] = "NA"
                     sign = -sign
             data["matrix"] = b.matrix
-            se_board = BoardSerializers(board, data={'content': json.dumps(b.matrix), 'sign': sign})
-            test_valid(se_board)
-            # board.content = json.dumps(b.matrix)
-            # board.sign = sign
-            # board.save()
+            board.content = json.dumps(b.matrix)
+            board.sign = sign
+            board.save()
             return JsonResponse(data)
         else:
             data["msg"] = "no"
@@ -247,9 +235,3 @@ def end_info(board, sign, win):
                 player.save()
 
 
-# check before serializer is saved
-def test_valid(serializer):
-    if serializer.is_valid():
-        serializer.save()
-    else:
-        JsonResponse({'msg': serializer.errors})
