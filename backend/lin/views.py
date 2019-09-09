@@ -42,15 +42,19 @@ def init_match(request):
         boards = Board.objects.all()
         for board in boards:
             if len(board.players.all()) == 1 and request.user not in board.players.all():
-                BoardInfo(board=board, players=request.user).save()
+                se_boinfo = BoardInfoSerializers(data={'board': board.pk, 'players': request.user.pk})
+                test_valid(se_boinfo)
+                # BoardInfo(board=board, players=request.user).save()
                 return JsonResponse({'msg': 'success', 'board_id': board.pk})
             if len(board.players.all()) == 2 and request.user in board.players.all() and \
                     not BoardInfo.objects.get(board=board, players=request.user).endTime:
                 return JsonResponse({'msg': 'success', 'board_id': board.pk})
         if len(Board.objects.filter(board=request.user.username + ' ' + str(request.user.games))) == 0:
-            new_board = Board.objects.create(board=request.user.username + ' ' + str(request.user.games))
-            new_board.save()
-            BoardInfo(board=new_board, players=request.user).save()
+            se_board = BoardSerializers(data={'board': request.user.username + ' ' + str(request.user.games)}, context={'user': request.user})
+            test_valid(se_board)
+            # new_board = Board.objects.create(board=request.user.username + ' ' + str(request.user.games))
+            # new_board.save()
+            # BoardInfo(board=new_board, players=request.user).save()
         return JsonResponse({'msg': 'pending'})
     else:
         return JsonResponse({'msg': 'User unauthorized!'})
@@ -79,9 +83,11 @@ def register(request):
         }
         return JsonResponse(data)
     else:
-        User.objects.create(username=name, password=password, email=email).save()
+        user = UserSerializers(data={'username': name, 'password': password, 'email': email})
+        test_valid(user)
+        # User.objects.create(username=name, password=password, email=email).save()
     data = {
-        'msg': 'success!'
+        'msg': 'success'
     }
     return JsonResponse(data)
 
@@ -117,15 +123,8 @@ def account_logout(request):
 def profile(request, name):
     if request.user.is_authenticated:
         Profile = User.objects.get(username=request.user)
-        data = {
-            'username': Profile.username,
-            'nickname': Profile.nickname,
-            'games': Profile.games,
-            # todo: serializer
-            'email': Profile.email,
-            'wins': Profile.wins,
-            'remark': Profile.remark,
-        }
+        se_user = UserSerializers(Profile)
+        data = se_user.data
         if str(request.user) == name:
             data['check'] = True
         else:
@@ -145,7 +144,7 @@ def init_game(request, board_id):
     else:
         if se_board.data.get('content') == '':
             empty = [[0 for j in range(5)] for i in range(5)]
-            boarding = BoardSerializers(boarding,  data={'content': empty}, partial=True)
+            boarding = BoardSerializers(boarding,  data={'content': json.dumps(empty)}, partial=True)
             test_valid(boarding)
             data = {
                 'board': empty,
