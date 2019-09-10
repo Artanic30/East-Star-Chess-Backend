@@ -137,9 +137,9 @@ def profile(request, name):
 
 
 class GameViewSet(viewsets.ViewSet):
-    @action(methods=['GET'], detail=False)
-    def init_game(self, request, board_id=None):
-        print(332132)
+    @action(methods=['POST'], detail=False)
+    def init_game(self, request):
+        board_id = request.POST.get('board_id')
         boarding = checking_board(request.user, board_id)
         se_board = BoardSerializers(boarding)
         if not boarding:
@@ -168,7 +168,8 @@ class GameViewSet(viewsets.ViewSet):
         return JsonResponse(data)
 
     @action(methods=['POST'], detail=False)
-    def update_game(self, request, board_id):
+    def update_game(self, request):
+        board_id = request.POST.get('board_id')
         board = checking_board(request.user, board_id)
         se_board = BoardSerializers(board)
         data = {}
