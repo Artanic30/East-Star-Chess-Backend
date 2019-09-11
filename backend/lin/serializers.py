@@ -14,11 +14,9 @@ class BoardSerializers(serializers.ModelSerializer):
         board = Board.objects.create(**validated_data)
         board.save()
         BoardInfo(board=board, players=self.context['user']).save()
-        print('BoardInfo created')
         return board
 
     def update(self, instance, validated_data):
-        print('Board updated!!')
         instance.end_msg = validated_data.get('end_msg', instance.end_msg)
         instance.content = validated_data.get('content', instance.content)
         instance.sign = validated_data.get('sign', instance.sign)
@@ -36,13 +34,11 @@ class BoardInfoSerializers(serializers.ModelSerializer):
         fields = '__all__'
 
     def create(self, validated_data):
-        print('boardInfo created!!')
         b = BoardInfo.objects.create(players=validated_data.get('players'), board=validated_data.get('board'))
         b.save()
         return b
 
     def update(self, instance, validated_data):
-        print('BoardInfo updated!!')
         # only update endTime info and sign
         instance.endTime = validated_data.get('endTime', instance.endTime)
         instance.sign = validated_data.get('sign', instance.sign)
@@ -61,7 +57,6 @@ class UserSerializers(serializers.ModelSerializer):
         return user
 
     def update(self, instance, validated_data):
-        print('User updated!!')
         instance.email = validated_data.get('email', instance.email)
         instance.nickname = validated_data.get('nickname', instance.nickname)
         instance.remark = validated_data.get('remark', instance.remark)

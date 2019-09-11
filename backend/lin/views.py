@@ -137,8 +137,9 @@ def profile(request, name):
 
 
 class GameViewSet(viewsets.ViewSet):
-    @action(methods=['POST'], detail=False)
-    def init_game(self, request):
+    @action(methods=['get'], detail=True)
+    def init(self, request, pk=None):
+        print(pk)
         board_id = request.POST.get('board_id')
         boarding = checking_board(request.user, board_id)
         se_board = BoardSerializers(boarding)
@@ -167,9 +168,39 @@ class GameViewSet(viewsets.ViewSet):
                 }
         return JsonResponse(data)
 
-    @action(methods=['POST'], detail=False)
-    def update_game(self, request):
-        board_id = request.POST.get('board_id')
+    @action(methods=['GET'], detail=True)
+    def init_game(self, request, pk=None):
+        board_id = pk
+        boarding = checking_board(request.user, board_id)
+        se_board = BoardSerializers(boarding)
+        if not boarding:
+            data = {
+                'msg': "Due to error, we can't find your game, please match again!"
+            }
+        else:
+            if se_board.data.get('content') == '':
+                empty = [[0 for j in range(5)] for i in range(5)]
+                boarding = BoardSerializers(boarding, data={'content': json.dumps(empty)}, partial=True)
+                test_valid(boarding)
+                data = {
+                    'board': empty,
+                    'msg': 'success'
+                }
+            else:
+                data = {
+                    'board': json.loads(se_board.data.get('content')),
+                    'msg': 'success'
+                }
+            if se_board.data.get('end_msg') != '':
+                data = {
+                    'board': se_board.data.get('end_msg'),
+                    'msg': 'end'
+                }
+        return JsonResponse(data)
+
+    @action(methods=['POST'], detail=True)
+    def update_game(self, request, pk=None):
+        board_id = pk
         board = checking_board(request.user, board_id)
         se_board = BoardSerializers(board)
         data = {}
