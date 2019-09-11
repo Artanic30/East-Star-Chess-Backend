@@ -7,9 +7,13 @@ import json
 from .serializers import UserSerializers, BoardInfoSerializers, BoardSerializers
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.decorators import api_view
 
 
 # Create your views here.
+@api_view(['GET'])
 def players(request, board_id):
     if request.user.is_authenticated:
         boarding = checking_board(request.user, board_id)
@@ -32,13 +36,14 @@ def players(request, board_id):
                 ]
             }
         else:
-            return JsonResponse({'msg': "Due to error, we can't find your game, please match again!"})
-        return JsonResponse(result)
+            return Response({'msg': "Due to error, we can't find your game, please match again!"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(result, status=status.HTTP_200_OK)
 
     else:
-        return JsonResponse({'msg': 'User unauthorized!'})
+        return Response({'msg': 'User unauthorized!'}, status=status.HTTP_401_UNAUTHORIZED)
 
 
+@api_view(['GET'])
 def init_match(request):
     if request.user.is_authenticated:
         boards = Board.objects.all()
@@ -47,34 +52,29 @@ def init_match(request):
                 se_boinfo = BoardInfoSerializers(data={'board': board.pk, 'players': request.user.pk})
                 test_valid(se_boinfo)
                 # BoardInfo(board=board, players=request.user).save()
-                return JsonResponse({'msg': 'success', 'board_id': board.pk})
+                return Response({'msg': 'success', 'board_id': board.pk}, status=status.HTTP_200_OK)
             if len(board.players.all()) == 2 and request.user in board.players.all() and \
                     not BoardInfo.objects.get(board=board, players=request.user).endTime:
-                return JsonResponse({'msg': 'success', 'board_id': board.pk})
+                return Response({'msg': 'success', 'board_id': board.pk}, status=status.HTTP_200_OK)
         if len(Board.objects.filter(board=request.user.username + ' ' + str(request.user.games))) == 0:
             se_board = BoardSerializers(data={'board': request.user.username + ' ' + str(request.user.games)}, context={'user': request.user})
             test_valid(se_board)
             # new_board = Board.objects.create(board=request.user.username + ' ' + str(request.user.games))
             # new_board.save()
             # BoardInfo(board=new_board, players=request.user).save()
-        return JsonResponse({'msg': 'pending'})
+        return Response({'msg': 'pending'}, status=status.HTTP_200_OK)
     else:
-        return JsonResponse({'msg': 'User unauthorized!'})
+        return Response({'msg': 'User unauthorized!'}, status=status.HTTP_401_UNAUTHORIZED)
 
 
+@api_view(['GET'])
 def init_state(request):
     if request.user.is_authenticated:
-        result = {
-            'state': True
-        }
-        return JsonResponse(result)
-    else:
-        result = {
-            'state': False
-        }
-        return JsonResponse(result)
+        return Response({'state': True}, status=status.HTTP_200_OK)
+    return Response({'state': False}, status=status.HTTP_200_OK)
 
 
+@api_view(['POST'])
 def register(request):
     name = request.POST.get('username')
     password = request.POST.get('password')
@@ -83,7 +83,7 @@ def register(request):
         data = {
             'msg': 'The name has already been used!'
         }
-        return JsonResponse(data)
+        return Response(data, status=status.HTTP_409_CONFLICT)
     else:
         user = UserSerializers(data={'username': name, 'password': password, 'email': email})
         test_valid(user)
@@ -91,9 +91,10 @@ def register(request):
     data = {
         'msg': 'success'
     }
-    return JsonResponse(data)
+    return Response(data, status=status.HTTP_200_OK)
 
 
+@api_view(['GET'])
 def account_login(request):
     name = request.POST.get('username')
     password = request.POST.get('password')
@@ -104,24 +105,26 @@ def account_login(request):
             data = {
                 'msg': 'success'
             }
-            return JsonResponse(data)
+            return Response(data, status=status.HTTP_200_OK)
         else:
             data = {
                 'msg': 'You account is not active, please contact the manager'
             }
-            return JsonResponse(data)
+            return Response(data, status=status.HTTP_401_UNAUTHORIZED)
     else:
         data = {
             'msg': 'Invalid username and password！'
         }
-    return JsonResponse(data)
+    return JsonResponse(data, status=status.HTTP_401_UNAUTHORIZED)
 
 
+@api_view(['GET'])
 def account_logout(request):
     logout(request)
-    return JsonResponse({'msg': '成功登出!'})
+    return Response({'msg': '成功登出!'}, status=status.HTTP_200_OK)
 
 
+@api_view(['GET'])
 def profile(request, name):
     if request.user.is_authenticated:
         Profile = User.objects.get(username=request.user)
@@ -131,43 +134,12 @@ def profile(request, name):
             data['check'] = True
         else:
             data['check'] = False
-        return JsonResponse(data)
+        return Response(data, status=status.HTTP_200_OK)
     else:
-        return JsonResponse({'msg': "You didn't login"})
+        return Response({'msg': "You didn't login"}, status=status.HTTP_401_UNAUTHORIZED)
 
 
 class GameViewSet(viewsets.ViewSet):
-    @action(methods=['get'], detail=True)
-    def init(self, request, pk=None):
-        print(pk)
-        board_id = request.POST.get('board_id')
-        boarding = checking_board(request.user, board_id)
-        se_board = BoardSerializers(boarding)
-        if not boarding:
-            data = {
-                'msg': "Due to error, we can't find your game, please match again!"
-            }
-        else:
-            if se_board.data.get('content') == '':
-                empty = [[0 for j in range(5)] for i in range(5)]
-                boarding = BoardSerializers(boarding, data={'content': json.dumps(empty)}, partial=True)
-                test_valid(boarding)
-                data = {
-                    'board': empty,
-                    'msg': 'success'
-                }
-            else:
-                data = {
-                    'board': json.loads(se_board.data.get('content')),
-                    'msg': 'success'
-                }
-            if se_board.data.get('end_msg') != '':
-                data = {
-                    'board': se_board.data.get('end_msg'),
-                    'msg': 'end'
-                }
-        return JsonResponse(data)
-
     @action(methods=['GET'], detail=True)
     def init_game(self, request, pk=None):
         board_id = pk
@@ -177,6 +149,7 @@ class GameViewSet(viewsets.ViewSet):
             data = {
                 'msg': "Due to error, we can't find your game, please match again!"
             }
+            return Response(data, status=status.HTTP_404_NOT_FOUND)
         else:
             if se_board.data.get('content') == '':
                 empty = [[0 for j in range(5)] for i in range(5)]
@@ -196,7 +169,7 @@ class GameViewSet(viewsets.ViewSet):
                     'board': se_board.data.get('end_msg'),
                     'msg': 'end'
                 }
-        return JsonResponse(data)
+        return Response(data, status=status.HTTP_200_OK)
 
     @action(methods=['POST'], detail=True)
     def update_game(self, request, pk=None):
@@ -214,7 +187,7 @@ class GameViewSet(viewsets.ViewSet):
                 if row == -1:
                     data["matrix"] = b.matrix
                     data["msg"] = "NA"
-                    return JsonResponse(data)
+                    return Response(data, status=status.HTTP_200_OK)
                 mark = {0: "", 1: "×", -1: "⚪"}
                 if not b.update((row, column), sign):
                     data["msg"] = "no"
@@ -244,13 +217,13 @@ class GameViewSet(viewsets.ViewSet):
                 # board.content = json.dumps(b.matrix)
                 # board.sign = sign
                 # board.save()
-                return JsonResponse(data)
+                return Response(data, status=status.HTTP_200_OK)
             else:
                 data["msg"] = "no"
-                return JsonResponse(data)
+                return Response(data, status=status.HTTP_200_OK)
         else:
             data['msg'] = "Due to error, we can't find your game, please match again!"
-            return JsonResponse(data)
+            return Response(data, status=status.HTTP_404_NOT_FOUND)
 
 
 def checking_board(user, board_id):
