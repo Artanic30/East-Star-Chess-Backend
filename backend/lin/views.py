@@ -13,58 +13,80 @@ from rest_framework.decorators import api_view
 
 
 # Create your views here.
-@api_view(['GET'])
-def players(request, board_id):
-    if request.user.is_authenticated:
-        boarding = checking_board(request.user, board_id)
-        if boarding:
-            sign = 1
-            for player in boarding.players.all():
-                tem = BoardInfo.objects.get(players=player, board=boarding)
-                boinfo_s = BoardInfoSerializers(tem, data={'sign': sign}, partial=True)
-                test_valid(boinfo_s)
-                sign = - sign
-            result = {
-                'msg': 'success',
-                'players': [
-                    {
-                        'name': boarding.players.all()[0].nickname
-                    },
-                    {
-                        'name': boarding.players.all()[1].nickname
-                    }
-                ]
+class AccountViewSet(viewsets.ViewSet):
+    serializers = UserSerializers
+
+    def create(self, request):
+        name = request.POST.get('username')
+        password = request.POST.get('password')
+        email = request.POST.get('email')
+        if len(User.objects.filter(username=name)) != 0:
+            data = {
+                'msg': 'The name has already been used!'
             }
+            return Response(data, status=status.HTTP_409_CONFLICT)
         else:
-            return Response({'msg': "Due to error, we can't find your game, please match again!"}, status=status.HTTP_404_NOT_FOUND)
-        return Response(result, status=status.HTTP_200_OK)
+            user = self.serializers(data={'username': name, 'password': password, 'email': email})
+            test_valid(user)
+        data = {
+            'msg': 'success'
+        }
+        return Response(data, status=status.HTTP_200_OK)
 
-    else:
-        return Response({'msg': 'User unauthorized!'}, status=status.HTTP_401_UNAUTHORIZED)
+    def retrieve(self, request, pk=None):
+        name = pk
+        if request.user.is_authenticated:
+            Profile = User.objects.get(username=request.user)
+            se_user = self.serializers(Profile)
+            data = se_user.data
+            data.pop('password')
+            if str(request.user) == name:
+                data['check'] = True
+            else:
+                data['check'] = False
+            return Response(data, status=status.HTTP_200_OK)
+        else:
+            return Response({'msg': "You didn't login"}, status=status.HTTP_401_UNAUTHORIZED)
 
+    def update(self, request, pk=None):
+        print('update function!')
+        return Response({'msg': 'update function!'})
 
-@api_view(['GET'])
-def init_match(request):
-    if request.user.is_authenticated:
-        boards = Board.objects.all()
-        for board in boards:
-            if len(board.players.all()) == 1 and request.user not in board.players.all():
-                se_boinfo = BoardInfoSerializers(data={'board': board.pk, 'players': request.user.pk})
-                test_valid(se_boinfo)
-                # BoardInfo(board=board, players=request.user).save()
-                return Response({'msg': 'success', 'board_id': board.pk}, status=status.HTTP_200_OK)
-            if len(board.players.all()) == 2 and request.user in board.players.all() and \
-                    not BoardInfo.objects.get(board=board, players=request.user).endTime:
-                return Response({'msg': 'success', 'board_id': board.pk}, status=status.HTTP_200_OK)
-        if len(Board.objects.filter(board=request.user.username + ' ' + str(request.user.games))) == 0:
-            se_board = BoardSerializers(data={'board': request.user.username + ' ' + str(request.user.games)}, context={'user': request.user})
-            test_valid(se_board)
-            # new_board = Board.objects.create(board=request.user.username + ' ' + str(request.user.games))
-            # new_board.save()
-            # BoardInfo(board=new_board, players=request.user).save()
-        return Response({'msg': 'pending'}, status=status.HTTP_200_OK)
-    else:
-        return Response({'msg': 'User unauthorized!'}, status=status.HTTP_401_UNAUTHORIZED)
+    def partial_update(self, request, pk=None):
+        print('p_update function!')
+        return Response({'msg': 'p_update function!'})
+
+    def destroy(self, request, pk=None):
+        print('destory function!')
+        return Response({'msg': 'destory function!'})
+
+    @action(methods=['get'], detail=False)
+    def logout(self, request):
+        logout(request)
+        return Response({'msg': '成功登出!'}, status=status.HTTP_200_OK)
+
+    @action(methods=['POST'], detail=False)
+    def login(self, request):
+        name = request.POST.get('username')
+        password = request.POST.get('password')
+        user = authenticate(username=name, password=password)
+        if user is not None:
+            if user.is_active:
+                login(request, user)
+                data = {
+                    'msg': 'success'
+                }
+                return Response(data, status=status.HTTP_200_OK)
+            else:
+                data = {
+                    'msg': 'You account is not active, please contact the manager'
+                }
+                return Response(data, status=status.HTTP_401_UNAUTHORIZED)
+        else:
+            data = {
+                'msg': 'Invalid username and password！'
+            }
+        return Response(data, status=status.HTTP_401_UNAUTHORIZED)
 
 
 @api_view(['GET'])
@@ -74,72 +96,58 @@ def init_state(request):
     return Response({'state': False}, status=status.HTTP_200_OK)
 
 
-@api_view(['POST'])
-def register(request):
-    name = request.POST.get('username')
-    password = request.POST.get('password')
-    email = request.POST.get('email')
-    if len(User.objects.filter(username=name)) != 0:
-        data = {
-            'msg': 'The name has already been used!'
-        }
-        return Response(data, status=status.HTTP_409_CONFLICT)
-    else:
-        user = UserSerializers(data={'username': name, 'password': password, 'email': email})
-        test_valid(user)
-        # User.objects.create(username=name, password=password, email=email).save()
-    data = {
-        'msg': 'success'
-    }
-    return Response(data, status=status.HTTP_200_OK)
-
-
-@api_view(['GET'])
-def account_login(request):
-    name = request.POST.get('username')
-    password = request.POST.get('password')
-    user = authenticate(username=name, password=password)
-    if user is not None:
-        if user.is_active:
-            login(request, user)
-            data = {
-                'msg': 'success'
-            }
-            return Response(data, status=status.HTTP_200_OK)
-        else:
-            data = {
-                'msg': 'You account is not active, please contact the manager'
-            }
-            return Response(data, status=status.HTTP_401_UNAUTHORIZED)
-    else:
-        data = {
-            'msg': 'Invalid username and password！'
-        }
-    return JsonResponse(data, status=status.HTTP_401_UNAUTHORIZED)
-
-
-@api_view(['GET'])
-def account_logout(request):
-    logout(request)
-    return Response({'msg': '成功登出!'}, status=status.HTTP_200_OK)
-
-
-@api_view(['GET'])
-def profile(request, name):
-    if request.user.is_authenticated:
-        Profile = User.objects.get(username=request.user)
-        se_user = UserSerializers(Profile)
-        data = se_user.data
-        if str(request.user) == name:
-            data['check'] = True
-        else:
-            data['check'] = False
-        return Response(data, status=status.HTTP_200_OK)
-    else:
-        return Response({'msg': "You didn't login"}, status=status.HTTP_401_UNAUTHORIZED)
-
-
 class GameViewSet(viewsets.ViewSet):
+    @action(methods=['GET'], detail=True)
+    def players(self, request, pk=None):
+        board_id = pk
+        if request.user.is_authenticated:
+            boarding = checking_board(request.user, board_id)
+            if boarding:
+                sign = 1
+                for player in boarding.players.all():
+                    tem = BoardInfo.objects.get(players=player, board=boarding)
+                    boinfo_s = BoardInfoSerializers(tem, data={'sign': sign}, partial=True)
+                    test_valid(boinfo_s)
+                    sign = - sign
+                result = {
+                    'msg': 'success',
+                    'players': [
+                        {
+                            'name': boarding.players.all()[0].nickname
+                        },
+                        {
+                            'name': boarding.players.all()[1].nickname
+                        }
+                    ]
+                }
+            else:
+                return Response({'msg': "Due to error, we can't find your game, please match again!"},
+                                status=status.HTTP_404_NOT_FOUND)
+            return Response(result, status=status.HTTP_200_OK)
+
+        else:
+            return Response({'msg': 'User unauthorized!'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    @action(methods=['GET'], detail=False)
+    def init_match(self, request):
+        if request.user.is_authenticated:
+            boards = Board.objects.all()
+            for board in boards:
+                if len(board.players.all()) == 1 and request.user not in board.players.all():
+                    se_boinfo = BoardInfoSerializers(data={'board': board.pk, 'players': request.user.pk})
+                    test_valid(se_boinfo)
+                    return Response({'msg': 'success', 'board_id': board.pk}, status=status.HTTP_200_OK)
+                if len(board.players.all()) == 2 and request.user in board.players.all() and \
+                        not BoardInfo.objects.get(board=board, players=request.user).endTime:
+                    return Response({'msg': 'success', 'board_id': board.pk}, status=status.HTTP_200_OK)
+            if len(Board.objects.filter(board=request.user.username + ' ' + str(request.user.games))) == 0:
+                se_board = BoardSerializers(data={'board': request.user.username + ' ' + str(request.user.games)},
+                                            context={'user': request.user})
+                test_valid(se_board)
+            return Response({'msg': 'pending'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'msg': 'User unauthorized!'}, status=status.HTTP_401_UNAUTHORIZED)
+
     @action(methods=['GET'], detail=True)
     def init_game(self, request, pk=None):
         board_id = pk
